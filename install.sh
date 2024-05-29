@@ -8,7 +8,7 @@ plain='\033[0m'
 cur_dir=$(pwd)
 
 # check root
-[[ $EUID -ne 0 ]] && echo -e "${red}错误：${plain} 必须使用root用户运行此脚本！\n" && exit 1
+[[ $EUID -ne 0 ]] && echo -e "${red}Error：${plain} You must use root user to run this script！\n" && exit 1
 
 # check os
 if [[ -f /etc/redhat-release ]]; then
@@ -26,7 +26,7 @@ elif cat /proc/version | grep -Eqi "ubuntu"; then
 elif cat /proc/version | grep -Eqi "centos|red hat|redhat"; then
     release="centos"
 else
-    echo -e "${red}未检测到系统版本，请联系脚本作者！${plain}\n" && exit 1
+    echo -e "${red}The system version was not detected, please contact the script author!${plain}\n" && exit 1
 fi
 
 arch=$(arch)
@@ -39,13 +39,13 @@ elif [[ $arch == "s390x" ]]; then
     arch="s390x"
 else
     arch="amd64"
-    echo -e "${red}检测架构失败，使用默认架构: ${arch}${plain}"
+    echo -e "${red}Failed to detect the architecture, using the default architecture:${arch}${plain}"
 fi
 
 echo "架构: ${arch}"
 
 if [ $(getconf WORD_BIT) != '32' ] && [ $(getconf LONG_BIT) != '64' ]; then
-    echo "本软件不支持 32 位系统(x86)，请使用 64 位系统(x86_64)，如果检测有误，请联系作者"
+    echo "This software does not support 32-bit systems (x86), please use 64-bit systems (x86_64). If the detection is incorrect, please contact the author"
     exit -1
 fi
 
@@ -61,15 +61,15 @@ fi
 
 if [[ x"${release}" == x"centos" ]]; then
     if [[ ${os_version} -le 6 ]]; then
-        echo -e "${red}请使用 CentOS 7 或更高版本的系统！${plain}\n" && exit 1
+        echo -e "${red}Please use CentOS 7 or higher!${plain}\n" && exit 1
     fi
 elif [[ x"${release}" == x"ubuntu" ]]; then
     if [[ ${os_version} -lt 16 ]]; then
-        echo -e "${red}请使用 Ubuntu 16 或更高版本的系统！${plain}\n" && exit 1
+        echo -e "${red}Please use Ubuntu 16 or higher!${plain}\n" && exit 1
     fi
 elif [[ x"${release}" == x"debian" ]]; then
     if [[ ${os_version} -lt 8 ]]; then
-        echo -e "${red}请使用 Debian 8 或更高版本的系统！${plain}\n" && exit 1
+        echo -e "${red}Please use Debian 8 or higher!${plain}\n" && exit 1
     fi
 fi
 
@@ -83,22 +83,22 @@ install_base() {
 
 #This function will be called when user installed x-ui out of sercurity
 config_after_install() {
-    echo -e "${yellow}出于安全考虑，安装/更新完成后需要强制修改端口与账户密码${plain}"
-    read -p "确认是否继续?[y/n]": config_confirm
+    echo -e "${yellow}For security reasons, you need to forcibly change the port and account password after installation/update is complete${plain}"
+    read -p "Are you sure you want to continue? [y/n]": config_confirm
     if [[ x"${config_confirm}" == x"y" || x"${config_confirm}" == x"Y" ]]; then
-        read -p "请设置您的账户名:" config_account
-        echo -e "${yellow}您的账户名将设定为:${config_account}${plain}"
-        read -p "请设置您的账户密码:" config_password
-        echo -e "${yellow}您的账户密码将设定为:${config_password}${plain}"
-        read -p "请设置面板访问端口:" config_port
-        echo -e "${yellow}您的面板访问端口将设定为:${config_port}${plain}"
-        echo -e "${yellow}确认设定,设定中${plain}"
+        read -p "Please set your account name:" config_account
+        echo -e "${yellow}Your account name will be set as:${config_account}${plain}"
+        read -p "Please set your account password:" config_password
+        echo -e "${yellow}Your account password will be set to:${config_password}${plain}"
+        read -p "Please set the panel access port:" config_port
+        echo -e "${yellow}Your panel access port will be set to:${config_port}${plain}"
+        echo -e "${yellow}Confirm setting, Setting${plain}"
         /usr/local/x-ui/x-ui setting -username ${config_account} -password ${config_password}
-        echo -e "${yellow}账户密码设定完成${plain}"
+        echo -e "${yellow}Account password setting completed${plain}"
         /usr/local/x-ui/x-ui setting -port ${config_port}
-        echo -e "${yellow}面板端口设定完成${plain}"
+        echo -e "${yellow}Panel port settings completed${plain}"
     else
-        echo -e "${red}已取消,所有设置项均为默认设置,请及时修改${plain}"
+        echo -e "${red}Cancelled, all settings are default, please modify in time${plain}"
     fi
 }
 
@@ -151,25 +151,25 @@ install_x-ui() {
     systemctl daemon-reload
     systemctl enable x-ui
     systemctl start x-ui
-    echo -e "${green}x-ui v${last_version}${plain} 安装完成，面板已启动，"
+    echo -e "${green}x-ui v${last_version}${plain} installed, the panel is now active"
     echo -e ""
-    echo -e "x-ui 管理脚本使用方法: "
+    echo -e "How to use x-ui admin script:"
     echo -e "----------------------------------------------"
-    echo -e "x-ui              - 显示管理菜单 (功能更多)"
-    echo -e "x-ui start        - 启动 x-ui 面板"
-    echo -e "x-ui stop         - 停止 x-ui 面板"
-    echo -e "x-ui restart      - 重启 x-ui 面板"
-    echo -e "x-ui status       - 查看 x-ui 状态"
-    echo -e "x-ui enable       - 设置 x-ui 开机自启"
-    echo -e "x-ui disable      - 取消 x-ui 开机自启"
-    echo -e "x-ui log          - 查看 x-ui 日志"
-    echo -e "x-ui v2-ui        - 迁移本机器的 v2-ui 账号数据至 x-ui"
-    echo -e "x-ui update       - 更新 x-ui 面板"
-    echo -e "x-ui install      - 安装 x-ui 面板"
-    echo -e "x-ui uninstall    - 卸载 x-ui 面板"
+    echo -e "x-ui - Display admin menu (more functions)"
+    echo -e "x-ui start - Enable x-ui panel"
+    echo -e "x-ui stop - Stop x-ui panel"
+    echo -e "x-ui restart - Restart x-ui panel"
+    echo -e "x-ui status - View x-ui status"
+    echo -e "x-ui enable - Set x-ui to open automatically"
+    echo -e "x-ui disable - Cancel x-ui to open automatically"
+    echo -e "x-ui log - View x-ui journal"
+    echo -e "x-ui v2-ui - Transfer this device's v2-ui account data to x-ui"
+    echo -e "x-ui update - Update x-ui panel"
+    echo -e "x-ui install - Install x-ui panel"
+    echo -e "x-ui uninstall - Load x-ui panel"
     echo -e "----------------------------------------------"
 }
 
-echo -e "${green}开始安装${plain}"
+echo -e "${green}start installation${plain}"
 install_base
 install_x-ui $1
