@@ -67,9 +67,17 @@ func (a *InboundController) addInbound(c *gin.Context) {
 	inbound.Enable = true
 	inbound.Tag = fmt.Sprintf("inbound-%v", inbound.Port)
 	err = a.inboundService.AddInbound(inbound)
-	jsonMsg(c, "添加", err)
 	if err == nil {
 		a.xrayService.SetToNeedRestart()
+		//	GetInboundByPort
+		inboundResult, err := a.inboundService.GetInboundByPort(inbound.Port)
+		if err != nil {
+			jsonMsg(c, "添加", err)
+			return
+		}
+		jsonObj(c, inboundResult, nil)
+	} else {
+		jsonMsg(c, "添加", err)
 	}
 }
 

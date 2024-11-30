@@ -107,6 +107,16 @@ func (s *InboundService) GetInbound(id int) (*model.Inbound, error) {
 	return inbound, nil
 }
 
+func (s *InboundService) GetInboundByPort(port int) (*model.Inbound, error) {
+	db := database.GetDB()
+	inbound := &model.Inbound{}
+	err := db.Model(model.Inbound{}).Where("port = ?", port).First(inbound).Error
+	if err != nil {
+		return nil, err
+	}
+	return inbound, nil
+}
+
 func (s *InboundService) UpdateInbound(inbound *model.Inbound) error {
 	exist, err := s.checkPortExist(inbound.Port, inbound.Id)
 	if err != nil {
