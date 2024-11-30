@@ -623,6 +623,9 @@ if [[ $# > 0 ]]; then
     "uninstall")
         check_install 0 && uninstall 0
         ;;
+    "version")
+        check_install 0 && /usr/local/x-ui/x-ui -v
+        ;;
     *) show_usage ;;
     esac
 else

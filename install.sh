@@ -83,6 +83,15 @@ install_base() {
 
 #This function will be called when user installed x-ui out of sercurity
 config_after_install() {
+    local existing_username=$(/usr/local/x-ui/x-ui setting -show true | grep -Eo 'username: .+' | awk '{print $2}')
+    local existing_password=$(/usr/local/x-ui/x-ui setting -show true | grep -Eo 'userpasswd: .+' | awk '{print $2}')
+
+    if existing_username != "admin" && existing_password != "admin"; then
+        echo -e "${yellow}The account name and password remain the same as the previous settings...${plain}"
+        return
+    fi
+
+
     echo -e "${yellow}For security reasons, you need to forcibly change the port and account password after installation/update is complete${plain}"
     read -p "Are you sure you want to continue? [y/n]": config_confirm
     if [[ x"${config_confirm}" == x"y" || x"${config_confirm}" == x"Y" ]]; then
