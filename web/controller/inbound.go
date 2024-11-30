@@ -109,8 +109,15 @@ func (a *InboundController) updateInbound(c *gin.Context) {
 		return
 	}
 	err = a.inboundService.UpdateInbound(inbound)
-	jsonMsg(c, "修改", err)
 	if err == nil {
 		a.xrayService.SetToNeedRestart()
+		inboundResult, err := a.inboundService.GetInbound(id)
+		if err != nil {
+			jsonMsg(c, "修改", err)
+			return
+		}
+		jsonObj(c, inboundResult, nil)
+	} else {
+		jsonMsg(c, "修改", err)
 	}
 }
