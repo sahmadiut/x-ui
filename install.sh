@@ -86,7 +86,7 @@ config_after_install() {
     local existing_username=$(/usr/local/x-ui/x-ui setting -show true | grep -Eo 'username: .+' | awk '{print $2}')
     local existing_password=$(/usr/local/x-ui/x-ui setting -show true | grep -Eo 'userpasswd: .+' | awk '{print $2}')
 
-    if existing_username != "admin" && existing_password != "admin"; then
+    if [[ "$existing_username" != "admin" && "$existing_password" != "admin" ]]; then
         echo -e "${yellow}The account name and password remain the same as the previous settings...${plain}"
         return
     fi
