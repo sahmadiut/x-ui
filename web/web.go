@@ -13,7 +13,6 @@ import (
 	"os"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 	"x-ui/config"
 	"x-ui/logger"
@@ -47,12 +46,6 @@ type wrapAssetsFS struct {
 	embed.FS
 }
 
-var (
-	blockedIPsFilePath = "/etc/x-ui/blocked_ips.csv"
-	blockedIPsCache    = make(map[string]bool)
-	blockedIPsMu       sync.RWMutex
-)
-
 // getBlockedIPs reads blocked_ips.csv and returns a map of blocked IP => true
 func getBlockedIPs() (map[string]bool, error) {
 	result := make(map[string]bool)
@@ -82,71 +75,19 @@ func getBlockedIPs() (map[string]bool, error) {
 	return result, nil
 }
 
-// saveBlockedIPs writes the map of blocked IP => true to blocked_ips.csv
-func saveBlockedIPs(data map[string]bool) error {
-	file, err := os.Create(blockedIPsFilePath)
-	if err != nil {
-		return err
-	}
-	defer file.Close()
-
-	writer := csv.NewWriter(file)
-	defer writer.Flush()
-
-	for ip := range data {
-		if err := writer.Write([]string{ip}); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-// BlockIPInAppLevel adds the IP to blocked_ips.csv and the cache in memory
-func BlockIPInAppLevel(ip string) error {
-	blockedIPsMu.Lock()
-	defer blockedIPsMu.Unlock()
-
-	// load the current data from file
-	data, err := getBlockedIPs()
-	if err != nil {
-		return err
-	}
-
-	// add the IP
-	data[ip] = true
-
-	// save to file
-	if err := saveBlockedIPs(data); err != nil {
-		return err
-	}
-
-	// also update the in-memory cache
-	blockedIPsCache[ip] = true
-	return nil
-}
-
 // IsIPBlocked checks if an IP is present in the blocked list (cache first, then fallback)
 func IsIPBlocked(ip string) bool {
-	blockedIPsMu.RLock()
-	blocked := blockedIPsCache[ip]
-	blockedIPsMu.RUnlock()
-
-	if blocked {
-		return true
+	// Always read from CSV on every call
+	blockedIPs, err := getBlockedIPs()
+	if err != nil {
+		// If there's an error reading the file, decide how to handle it.
+		// For instance, log it and assume "not blocked".
+		logger.Errorf("Error reading blocked IP list: %v", err)
+		return false
 	}
 
-	// If not found in cache, maybe the app just started;
-	// so we load from disk once and update the cache in memory.
-	blockedIPsMu.Lock()
-	defer blockedIPsMu.Unlock()
-
-	data, err := getBlockedIPs()
-	if err == nil {
-		// update the global cache
-		blockedIPsCache = data
-	}
-
-	return data[ip]
+	// Return whether `ip` exists in the map
+	return blockedIPs[ip]
 }
 
 func (f *wrapAssetsFS) Open(name string) (fs.File, error) {
