@@ -206,7 +206,14 @@ func (s *Server) initRouter() (*gin.Engine, error) {
 	engine := gin.Default()
 
 	engine.Use(func(c *gin.Context) {
-		clientIP := getRemoteIp(c)
+		clientIP := c.GetHeader("X-Forwarded-For")
+		if clientIP == "" {
+			addr := c.Request.RemoteAddr
+			clientIP, _, _ = net.SplitHostPort(addr)
+		} else {
+			ips := strings.Split(clientIP, ",")
+			clientIP = ips[0]
+		}
 		if IsIPBlocked(clientIP) {
 			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{
 				"message": "Your IP is blocked",
