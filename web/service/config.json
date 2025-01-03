@@ -21,12 +21,26 @@
   "outbounds": [
     {
       "protocol": "freedom",
-      "settings": {}
+      "settings": {
+        "domainStrategy": "UseIPv4"
+      }
     },
     {
       "protocol": "blackhole",
       "settings": {},
       "tag": "blocked"
+    },
+    {
+      "tag": "WARP",
+      "protocol": "socks",
+      "settings": {
+        "servers": [
+          {
+            "address": "127.0.0.1",
+            "port": 40000
+          }
+        ]
+      }
     }
   ],
   "policy": {
@@ -57,6 +71,12 @@
           "bittorrent"
         ],
         "type": "field"
+      },
+      {
+        "type": "field",
+        "port": "80,443",
+        "network": "udp",
+        "outboundTag": "blocked"
       }
     ]
   },
