@@ -2,7 +2,6 @@ package controller
 
 import (
 	"encoding/csv"
-	"fmt"
 	"net/http"
 	"os"
 	"os/exec"
