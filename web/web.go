@@ -13,6 +13,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 	"x-ui/config"
 	"x-ui/logger"
@@ -45,6 +46,10 @@ var startTime = time.Now()
 type wrapAssetsFS struct {
 	embed.FS
 }
+
+var (
+	blockedIPsFilePath = "/etc/x-ui/blocked_ips.csv"
+)
 
 // getBlockedIPs reads blocked_ips.csv and returns a map of blocked IP => true
 func getBlockedIPs() (map[string]bool, error) {
