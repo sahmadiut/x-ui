@@ -1,7 +1,10 @@
 package controller
 
 import (
+	"encoding/csv"
 	"net/http"
+	"os"
+	"strconv"
 	"time"
 	"x-ui/logger"
 	"x-ui/web/job"
@@ -42,6 +45,36 @@ func (a *IndexController) index(c *gin.Context) {
 	html(c, "login.html", "登录", nil)
 }
 
+// logFailedLogin logs the failed login attempt to a CSV file
+func logFailedLogin(ip string) {
+	mutex.Lock()
+	defer mutex.Unlock()
+
+	// Increment the counter for the given IP
+	failedLoginAttempts[ip]++
+
+	// Open the CSV file
+	filePath := "/etc/x-ui/failed_logins.csv"
+	file, err := os.OpenFile(filePath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
+	if err != nil {
+		logger.Errorf("failed to open file %s: %v", filePath, err)
+		return
+	}
+	defer file.Close()
+
+	// Write to the CSV file
+	writer := csv.NewWriter(file)
+	defer writer.Flush()
+
+	for ip, attempts := range failedLoginAttempts {
+		record := []string{ip, strconv.Itoa(attempts)}
+		if err := writer.Write(record); err != nil {
+			logger.Errorf("failed to write to file %s: %v", filePath, err)
+			return
+		}
+	}
+}
+
 func (a *IndexController) login(c *gin.Context) {
 	var form LoginForm
 	err := c.ShouldBind(&form)
@@ -60,9 +93,11 @@ func (a *IndexController) login(c *gin.Context) {
 	user := a.userService.CheckUser(form.Username, form.Password)
 	timeStr := time.Now().Format("2006-01-02 15:04:05")
 	if user == nil {
-		job.NewStatsNotifyJob().UserLoginNotify(form.Username, getRemoteIp(c), timeStr, 0)
-		logger.Infof("wrong username or password: \"%s\" \"%s\"", form.Username, form.Password)
+		ip := getRemoteIp(c)
+		job.NewStatsNotifyJob().UserLoginNotify(form.Username, ip, timeStr, 0)
+		logger.Infof("wrong username or password: \"%s\" \"%s\", IP: %s", form.Username, form.Password, ip)
 		pureJsonMsg(c, false, "用户名或密码错误")
+		logFailedLogin(ip)
 		return
 	} else {
 		logger.Infof("%s login success,Ip Address:%s\n", form.Username, getRemoteIp(c))
