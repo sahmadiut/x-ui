@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/tls"
 	"embed"
+	"encoding/csv"
 	"html/template"
 	"io"
 	"io/fs"
@@ -12,6 +13,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 	"x-ui/config"
 	"x-ui/logger"
@@ -43,6 +45,108 @@ var startTime = time.Now()
 
 type wrapAssetsFS struct {
 	embed.FS
+}
+
+var (
+	blockedIPsFilePath = "/etc/x-ui/blocked_ips.csv"
+	blockedIPsCache    = make(map[string]bool)
+	blockedIPsMu       sync.RWMutex
+)
+
+// getBlockedIPs reads blocked_ips.csv and returns a map of blocked IP => true
+func getBlockedIPs() (map[string]bool, error) {
+	result := make(map[string]bool)
+
+	file, err := os.Open(blockedIPsFilePath)
+	if err != nil {
+		// If file doesn't exist, that's okay, just return an empty map
+		return result, nil
+	}
+	defer file.Close()
+
+	csvReader := csv.NewReader(file)
+	records, err := csvReader.ReadAll()
+	if err != nil {
+		return result, err
+	}
+
+	for _, record := range records {
+		if len(record) == 0 {
+			continue
+		}
+		ip := strings.TrimSpace(record[0])
+		if ip != "" {
+			result[ip] = true
+		}
+	}
+	return result, nil
+}
+
+// saveBlockedIPs writes the map of blocked IP => true to blocked_ips.csv
+func saveBlockedIPs(data map[string]bool) error {
+	file, err := os.Create(blockedIPsFilePath)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	writer := csv.NewWriter(file)
+	defer writer.Flush()
+
+	for ip := range data {
+		if err := writer.Write([]string{ip}); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// BlockIPInAppLevel adds the IP to blocked_ips.csv and the cache in memory
+func BlockIPInAppLevel(ip string) error {
+	blockedIPsMu.Lock()
+	defer blockedIPsMu.Unlock()
+
+	// load the current data from file
+	data, err := getBlockedIPs()
+	if err != nil {
+		return err
+	}
+
+	// add the IP
+	data[ip] = true
+
+	// save to file
+	if err := saveBlockedIPs(data); err != nil {
+		return err
+	}
+
+	// also update the in-memory cache
+	blockedIPsCache[ip] = true
+	return nil
+}
+
+// IsIPBlocked checks if an IP is present in the blocked list (cache first, then fallback)
+func IsIPBlocked(ip string) bool {
+	blockedIPsMu.RLock()
+	blocked := blockedIPsCache[ip]
+	blockedIPsMu.RUnlock()
+
+	if blocked {
+		return true
+	}
+
+	// If not found in cache, maybe the app just started;
+	// so we load from disk once and update the cache in memory.
+	blockedIPsMu.Lock()
+	defer blockedIPsMu.Unlock()
+
+	data, err := getBlockedIPs()
+	if err == nil {
+		// update the global cache
+		blockedIPsCache = data
+	}
+
+	return data[ip]
 }
 
 func (f *wrapAssetsFS) Open(name string) (fs.File, error) {
@@ -155,6 +259,17 @@ func (s *Server) initRouter() (*gin.Engine, error) {
 	}
 
 	engine := gin.Default()
+
+	engine.Use(func(c *gin.Context) {
+		clientIP := c.ClientIP()
+		if IsIPBlocked(clientIP) {
+			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{
+				"message": "Your IP is blocked",
+			})
+			return
+		}
+		c.Next()
+	})
 
 	secret, err := s.settingService.GetSecret()
 	if err != nil {

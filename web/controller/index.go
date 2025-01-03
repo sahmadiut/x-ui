@@ -195,3 +195,30 @@ func blockIP(ip string) {
 		logger.Infof("Successfully blocked IP %s with iptables", ip)
 	}
 }
+
+func unblockIP(ip string) error {
+	cmd := exec.Command("iptables", "-D", "INPUT", "-s", ip, "-j", "DROP")
+	if err := cmd.Run(); err != nil {
+		return err
+	}
+	logger.Infof("Successfully unblocked IP %s from iptables", ip)
+
+	// remove from application-level block list
+	blockedIPsMu.Lock()
+	defer blockedIPsMu.Unlock()
+
+	data, err := getBlockedIPs()
+	if err != nil {
+		return err
+	}
+
+	delete(data, ip)
+	if err := saveBlockedIPs(data); err != nil {
+		return err
+	}
+
+	delete(blockedIPsCache, ip)
+	logger.Infof("Successfully unblocked IP %s in application layer", ip)
+
+	return nil
+}
