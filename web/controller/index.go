@@ -12,6 +12,12 @@ import (
 	"x-ui/web/session"
 
 	"github.com/gin-gonic/gin"
+	"sync"
+)
+
+var (
+	failedLoginAttempts = make(map[string]int)
+	mutex               sync.Mutex
 )
 
 type LoginForm struct {
