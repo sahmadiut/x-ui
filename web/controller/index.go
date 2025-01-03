@@ -2,8 +2,10 @@ package controller
 
 import (
 	"encoding/csv"
+	"fmt"
 	"net/http"
 	"os"
+	"os/exec"
 	"strconv"
 	"time"
 	"x-ui/logger"
@@ -12,12 +14,6 @@ import (
 	"x-ui/web/session"
 
 	"github.com/gin-gonic/gin"
-	"sync"
-)
-
-var (
-	failedLoginAttempts = make(map[string]int)
-	mutex               sync.Mutex
 )
 
 type LoginForm struct {
@@ -51,36 +47,6 @@ func (a *IndexController) index(c *gin.Context) {
 	html(c, "login.html", "登录", nil)
 }
 
-// logFailedLogin logs the failed login attempt to a CSV file
-func logFailedLogin(ip string) {
-	mutex.Lock()
-	defer mutex.Unlock()
-
-	// Increment the counter for the given IP
-	failedLoginAttempts[ip]++
-
-	// Open the CSV file
-	filePath := "/etc/x-ui/failed_logins.csv"
-	file, err := os.OpenFile(filePath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
-	if err != nil {
-		logger.Errorf("failed to open file %s: %v", filePath, err)
-		return
-	}
-	defer file.Close()
-
-	// Write to the CSV file
-	writer := csv.NewWriter(file)
-	defer writer.Flush()
-
-	for ip, attempts := range failedLoginAttempts {
-		record := []string{ip, strconv.Itoa(attempts)}
-		if err := writer.Write(record); err != nil {
-			logger.Errorf("failed to write to file %s: %v", filePath, err)
-			return
-		}
-	}
-}
-
 func (a *IndexController) login(c *gin.Context) {
 	var form LoginForm
 	err := c.ShouldBind(&form)
@@ -96,18 +62,37 @@ func (a *IndexController) login(c *gin.Context) {
 		pureJsonMsg(c, false, "请输入密码")
 		return
 	}
+
 	user := a.userService.CheckUser(form.Username, form.Password)
 	timeStr := time.Now().Format("2006-01-02 15:04:05")
+	ip := getRemoteIp(c)
+
 	if user == nil {
-		ip := getRemoteIp(c)
+		// Handle failed login
+		incrementFailedLoginCount(ip)
+
+		// Check how many failed attempts so far
+		attempts := getFailedLoginCount(ip)
+		logger.Infof(
+			"wrong username or password: \"%s\" \"%s\", IP: %s (Failed Attempts: %d)",
+			form.Username, form.Password, ip, attempts,
+		)
+
+		// If attempts exceed 5, block the IP
+		if attempts > 5 {
+			blockIP(ip)
+			logger.Infof("Blocked IP: %s due to repeated failed login attempts", ip)
+		}
+
 		job.NewStatsNotifyJob().UserLoginNotify(form.Username, ip, timeStr, 0)
-		logger.Infof("wrong username or password: \"%s\" \"%s\", IP: %s", form.Username, form.Password, ip)
 		pureJsonMsg(c, false, "用户名或密码错误")
-		logFailedLogin(ip)
 		return
 	} else {
-		logger.Infof("%s login success,Ip Address:%s\n", form.Username, getRemoteIp(c))
-		job.NewStatsNotifyJob().UserLoginNotify(form.Username, getRemoteIp(c), timeStr, 1)
+		// Reset the failed attempts on successful login (optional)
+		resetFailedLoginCount(ip)
+
+		logger.Infof("%s login success, IP: %s\n", form.Username, ip)
+		job.NewStatsNotifyJob().UserLoginNotify(form.Username, ip, timeStr, 1)
 	}
 
 	err = session.SetLoginUser(c, user)
@@ -122,4 +107,92 @@ func (a *IndexController) logout(c *gin.Context) {
 	}
 	session.ClearSession(c)
 	c.Redirect(http.StatusTemporaryRedirect, c.GetString("base_path"))
+}
+
+// -----------------------------------------------------------------------------
+// Utility functions for handling failed login attempts in /etc/x-ui/failed_logins.csv
+// -----------------------------------------------------------------------------
+
+// getFailedLoginData reads /etc/x-ui/failed_logins.csv into a map[ip] = count.
+func getFailedLoginData() map[string]int {
+	data := make(map[string]int)
+
+	file, err := os.Open("/etc/x-ui/failed_logins.csv")
+	if err != nil {
+		// If the file doesn't exist or can't open, return empty map
+		return data
+	}
+	defer file.Close()
+
+	csvReader := csv.NewReader(file)
+	records, err := csvReader.ReadAll()
+	if err != nil {
+		return data
+	}
+
+	for _, record := range records {
+		if len(record) < 2 {
+			continue
+		}
+		ip := record[0]
+		count, err := strconv.Atoi(record[1])
+		if err != nil {
+			continue
+		}
+		data[ip] = count
+	}
+	return data
+}
+
+// saveFailedLoginData writes the map[ip] = count into /etc/x-ui/failed_logins.csv.
+func saveFailedLoginData(data map[string]int) {
+	file, err := os.Create("/etc/x-ui/failed_logins.csv")
+	if err != nil {
+		logger.Error("Could not create /etc/x-ui/failed_logins.csv:", err)
+		return
+	}
+	defer file.Close()
+
+	writer := csv.NewWriter(file)
+	defer writer.Flush()
+
+	for ip, count := range data {
+		record := []string{ip, strconv.Itoa(count)}
+		if err := writer.Write(record); err != nil {
+			logger.Error("Error writing record to CSV:", err)
+		}
+	}
+}
+
+// getFailedLoginCount returns the current failed login count for a given IP.
+func getFailedLoginCount(ip string) int {
+	data := getFailedLoginData()
+	return data[ip]
+}
+
+// incrementFailedLoginCount increments the failed attempts for a given IP.
+func incrementFailedLoginCount(ip string) {
+	data := getFailedLoginData()
+	data[ip] = data[ip] + 1
+	saveFailedLoginData(data)
+}
+
+// resetFailedLoginCount sets the failed attempts for an IP to 0 (on successful login, if desired).
+func resetFailedLoginCount(ip string) {
+	data := getFailedLoginData()
+	if _, ok := data[ip]; ok {
+		data[ip] = 0
+		saveFailedLoginData(data)
+	}
+}
+
+// blockIP executes an iptables command to block the given IP address.
+func blockIP(ip string) {
+	cmd := exec.Command("iptables", "-I", "INPUT", "-s", ip, "-j", "DROP")
+	err := cmd.Run()
+	if err != nil {
+		logger.Errorf("Error blocking IP %s: %v", ip, err)
+	} else {
+		logger.Infof("Successfully blocked IP %s with iptables", ip)
+	}
 }
