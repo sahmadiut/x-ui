@@ -4,7 +4,6 @@ import (
 	"context"
 	"crypto/tls"
 	"embed"
-	"encoding/csv"
 	"html/template"
 	"io"
 	"io/fs"
@@ -44,54 +43,6 @@ var startTime = time.Now()
 
 type wrapAssetsFS struct {
 	embed.FS
-}
-
-var (
-	blockedIPsFilePath = "/etc/x-ui/blocked_ips.csv"
-)
-
-// getBlockedIPs reads blocked_ips.csv and returns a map of blocked IP => true
-func getBlockedIPs() (map[string]bool, error) {
-	result := make(map[string]bool)
-
-	file, err := os.Open(blockedIPsFilePath)
-	if err != nil {
-		// If file doesn't exist, that's okay, just return an empty map
-		return result, nil
-	}
-	defer file.Close()
-
-	csvReader := csv.NewReader(file)
-	records, err := csvReader.ReadAll()
-	if err != nil {
-		return result, err
-	}
-
-	for _, record := range records {
-		if len(record) == 0 {
-			continue
-		}
-		ip := strings.TrimSpace(record[0])
-		if ip != "" {
-			result[ip] = true
-		}
-	}
-	return result, nil
-}
-
-// IsIPBlocked checks if an IP is present in the blocked list (cache first, then fallback)
-func IsIPBlocked(ip string) bool {
-	// Always read from CSV on every call
-	blockedIPs, err := getBlockedIPs()
-	if err != nil {
-		// If there's an error reading the file, decide how to handle it.
-		// For instance, log it and assume "not blocked".
-		logger.Errorf("Error reading blocked IP list: %v", err)
-		return false
-	}
-
-	// Return whether `ip` exists in the map
-	return blockedIPs[ip]
 }
 
 func (f *wrapAssetsFS) Open(name string) (fs.File, error) {
@@ -204,24 +155,6 @@ func (s *Server) initRouter() (*gin.Engine, error) {
 	}
 
 	engine := gin.Default()
-
-	engine.Use(func(c *gin.Context) {
-		clientIP := c.GetHeader("X-Forwarded-For")
-		if clientIP == "" {
-			addr := c.Request.RemoteAddr
-			clientIP, _, _ = net.SplitHostPort(addr)
-		} else {
-			ips := strings.Split(clientIP, ",")
-			clientIP = ips[0]
-		}
-		if IsIPBlocked(clientIP) {
-			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{
-				"message": "Your IP is blocked",
-			})
-			return
-		}
-		c.Next()
-	})
 
 	secret, err := s.settingService.GetSecret()
 	if err != nil {
