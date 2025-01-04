@@ -2,6 +2,7 @@ package controller
 
 import (
 	"net/http"
+	"os"
 	"time"
 	"x-ui/logger"
 	"x-ui/web/job"
@@ -69,17 +70,27 @@ func (a *IndexController) login(c *gin.Context) {
 	}
 
 	if user == nil {
-
+		// Log to logger
 		logger.Infof(
 			"wrong username or password: \"%s\" \"%s\", IPs: (%s)",
 			form.Username, form.Password, ips,
 		)
 
+		// Log to file
+		logFilePath := "/etc/x-ui/failed_logins.log"
+		file, err := os.OpenFile(logFilePath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+		if err == nil {
+			defer file.Close()
+			logEntry := timeStr + " - Failed login attempt: Username: " + form.Username + ", Password: " + form.Password + ", IPs: " + ips + "\n"
+			file.WriteString(logEntry)
+		} else {
+			logger.Errorf("Could not open log file: %s", err.Error())
+		}
+
 		job.NewStatsNotifyJob().UserLoginNotify(form.Username, ips, timeStr, 0)
 		pureJsonMsg(c, false, "用户名或密码错误")
 		return
 	} else {
-
 		logger.Infof("%s login success, IP: %s\n", form.Username, ips)
 		job.NewStatsNotifyJob().UserLoginNotify(form.Username, ips, timeStr, 1)
 	}
