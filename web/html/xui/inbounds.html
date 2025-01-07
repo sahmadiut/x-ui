@@ -115,6 +115,10 @@
                 showSizeChanger: true,
                 pageSizeOptions: ['10', '20', '50'],
             },
+            total: { // Define the total property here
+                up: 0,
+                down: 0,
+            },
         },
         methods: {
             loading(spinning = true) {
@@ -134,6 +138,14 @@
             setInbounds(dbInbounds) {
                 this.inbounds = dbInbounds.map(inbound => new DBInbound(inbound).toInbound());
                 this.dbInbounds = dbInbounds.map(inbound => new DBInbound(inbound));
+
+                // Calculate the total upload and download
+                let up = 0, down = 0;
+                for (const inbound of this.dbInbounds) {
+                    up += inbound.up || 0;
+                    down += inbound.down || 0;
+                }
+                this.total = { up, down }; // Update total
             },
             clickAction(action, dbInbound) {
                 switch (action.key) {
