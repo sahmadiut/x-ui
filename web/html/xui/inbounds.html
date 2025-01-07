@@ -115,10 +115,35 @@
                 showSizeChanger: true,
                 pageSizeOptions: ['10', '20', '50'],
             },
-            total: { // Define the total property here
+            total: {
                 up: 0,
                 down: 0,
             },
+            columns: [ // Define the columns property here
+                {
+                    title: 'Protocol',
+                    dataIndex: 'protocol',
+                    key: 'protocol',
+                    scopedSlots: { customRender: 'protocol' },
+                },
+                {
+                    title: 'Traffic',
+                    dataIndex: 'traffic',
+                    key: 'traffic',
+                    scopedSlots: { customRender: 'traffic' },
+                },
+                {
+                    title: 'Settings',
+                    dataIndex: 'settings',
+                    key: 'settings',
+                    scopedSlots: { customRender: 'settings' },
+                },
+                {
+                    title: 'Action',
+                    key: 'action',
+                    scopedSlots: { customRender: 'action' },
+                },
+            ],
         },
         methods: {
             loading(spinning = true) {
