@@ -24,6 +24,35 @@ func (s *InboundService) GetInbounds(userId int) ([]*model.Inbound, error) {
 	return inbounds, nil
 }
 
+// inbounds, err := a.inboundService.GetPagedInbounds(user.Id, page, perpage)
+func (s *InboundService) GetPagedInbounds(userId int, page, perpage int) ([]*model.Inbound, int64, error) {
+	db := database.GetDB()
+	var inbounds []*model.Inbound
+	var totalCount int64
+
+	// Get total count of inbounds for the user
+	err := db.Model(&model.Inbound{}).
+		Where("user_id = ?", userId).
+		Count(&totalCount).Error
+	if err != nil {
+		return nil, 0, err
+	}
+
+	// Fetch paginated results
+	err = db.Model(&model.Inbound{}).
+		Where("user_id = ?", userId).
+		Order("id DESC"). // Reverse order by ID
+		Offset((page - 1) * perpage).
+		Limit(perpage).
+		Find(&inbounds).Error
+
+	if err != nil && err != gorm.ErrRecordNotFound {
+		return nil, 0, err
+	}
+
+	return inbounds, totalCount, nil
+}
+
 func (s *InboundService) GetAllInbounds() ([]*model.Inbound, error) {
 	db := database.GetDB()
 	var inbounds []*model.Inbound

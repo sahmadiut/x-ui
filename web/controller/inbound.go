@@ -27,6 +27,7 @@ func (a *InboundController) initRouter(g *gin.RouterGroup) {
 	g = g.Group("/inbound")
 
 	g.POST("/list", a.getInbounds)
+	g.POST("/paged-list", a.getPagedInbounds)
 	g.POST("/add", a.addInbound)
 	g.POST("/del/:id", a.delInbound)
 	g.POST("/update/:id", a.updateInbound)
@@ -53,6 +54,42 @@ func (a *InboundController) getInbounds(c *gin.Context) {
 		return
 	}
 	jsonObj(c, inbounds, nil)
+}
+
+func (a *InboundController) getPagedInbounds(c *gin.Context) {
+	// Get user and pagination parameters
+	user := session.GetLoginUser(c)
+
+	page, err := strconv.Atoi(c.DefaultPostForm("page", "1")) // Default to page 1
+	if err != nil || page < 1 {
+		page = 1
+	}
+
+	perpage, err := strconv.Atoi(c.DefaultPostForm("perpage", "10")) // Default to 10 per page
+	if err != nil || perpage < 1 {
+		perpage = 10
+	}
+
+	// Fetch paginated inbounds and total count
+	inbounds, totalCount, err := a.inboundService.GetPagedInbounds(user.Id, page, perpage)
+	if err != nil {
+		jsonMsg(c, "获取", err)
+		return
+	}
+
+	// Calculate total pages
+	totalPages := (totalCount + int64(perpage) - 1) / int64(perpage) // Round up division
+
+	// Prepare response
+	response := gin.H{
+		"inbounds":     inbounds,
+		"total_count":  totalCount,
+		"total_pages":  totalPages,
+		"current_page": page,
+		"per_page":     perpage,
+	}
+
+	jsonObj(c, response, nil)
 }
 
 func (a *InboundController) addInbound(c *gin.Context) {
