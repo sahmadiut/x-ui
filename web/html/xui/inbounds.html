@@ -208,19 +208,20 @@
                 if (!msg.success) {
                     return;
                 }
-                this.setInbounds(msg.obj.inbounds, msg.obj.total_count, msg.obj.total_up, msg.obj.total_down);
+                this.setInbounds(msg.obj);
             },
-            setInbounds(dbInbounds, total, total_up, total_down) {
+            setInbounds(dbInbounds) {
                 this.inbounds.splice(0);
                 this.dbInbounds.splice(0);
-                for (const inbound of dbInbounds) {
+                for (const inbound of dbInbounds.inbounds) {
                     const dbInbound = new DBInbound(inbound);
                     this.inbounds.push(dbInbound.toInbound());
                     this.dbInbounds.push(dbInbound);
                 }
-                this.paginationOptions.total = total;
-                this.total_up = total_up;
-                this.total_down = total_down;
+                this.paginationOptions.total = dbInbounds.total;
+                this.paginationOptions.current = this.currentPage;
+                this.total_up = dbInbounds.total_up;
+                this.total_down = dbInbounds.total_down;
             },
             handleTableChange(pagination) {
                 this.currentPage = pagination.current;
