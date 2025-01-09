@@ -25,40 +25,46 @@ func (s *InboundService) GetInbounds(userId int) ([]*model.Inbound, error) {
 }
 
 // inbounds, err := a.inboundService.GetPagedInbounds(user.Id, page, perpage)
-func (s *InboundService) GetPagedInbounds(userId int, page, perpage int) ([]*model.Inbound, int64, int64, int64, error) {
+func (s *InboundService) GetPagedInbounds(userId int, page, perpage int, query string) ([]*model.Inbound, int64, int64, int64, error) {
 	db := database.GetDB()
 	var inbounds []*model.Inbound
 	var totalCount int64
 	var totalDown int64
 	var totalUp int64
 
+	// Build the base query
+	baseQuery := db.Model(&model.Inbound{}).Where("user_id = ?", userId)
+
+	// Apply query filter if provided
+	if query != "" {
+		queryPattern := "%" + query + "%"
+		baseQuery = baseQuery.Where("remark LIKE ? OR port LIKE ?", queryPattern, queryPattern)
+	}
+
 	// Get total count of inbounds for the user
-	err := db.Model(&model.Inbound{}).
-		Where("user_id = ?", userId).
-		Count(&totalCount).Error
+	err := baseQuery.Count(&totalCount).Error
 	if err != nil {
 		return nil, 0, 0, 0, err
 	}
 
 	// Get the total sum of Down and Up
-	err = db.Model(&model.Inbound{}).
-		Where("user_id = ?", userId).
-		Select("COALESCE(SUM(down), 0) AS total_down, COALESCE(SUM(up), 0) AS total_up").
+	err = baseQuery.Select("COALESCE(SUM(down), 0) AS total_down, COALESCE(SUM(up), 0) AS total_up").
 		Scan(&struct {
 			TotalDown *int64 `gorm:"column:total_down"`
 			TotalUp   *int64 `gorm:"column:total_up"`
-		}{&totalDown, &totalUp}).Error
+		}{
+			TotalDown: &totalDown,
+			TotalUp:   &totalUp,
+		}).Error
 	if err != nil {
 		return nil, 0, 0, 0, err
 	}
 
 	// Fetch paginated results
-	err = db.Model(&model.Inbound{}).
-		Where("user_id = ?", userId).
-		Order("id DESC"). // Reverse order by ID
-		Offset((page - 1) * perpage).
-		Limit(perpage).
-		Find(&inbounds).Error
+	err = baseQuery.Order("id DESC"). // Reverse order by ID
+						Offset((page - 1) * perpage).
+						Limit(perpage).
+						Find(&inbounds).Error
 
 	if err != nil && err != gorm.ErrRecordNotFound {
 		return nil, 0, 0, 0, err
