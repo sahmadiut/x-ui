@@ -234,10 +234,20 @@
                 if (ObjectUtil.isEmpty(key)) {
                     this.getDBInbounds();
                 } else {
-                    const filtered = this.dbInbounds.filter(inbound => ObjectUtil.deepSearch(inbound, key));
-                    this.setInbounds(filtered, filtered.length);
+                    this.loading();
+                    HttpUtil.post('/xui/inbound/paged-list', {
+                        page: this.currentPage,
+                        perpage: this.perPage,
+                        query: key // Sending the search key
+                    }).then(msg => {
+                        this.loading(false);
+                        if (!msg.success) {
+                            return;
+                        }
+                        this.setInbounds(msg.obj);
+                    });
                 }
-            },
+            }
             clickAction(action, dbInbound) {
                 switch (action.key) {
                     case "qrcode":
