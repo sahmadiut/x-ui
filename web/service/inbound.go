@@ -32,32 +32,42 @@ func (s *InboundService) GetPagedInbounds(userId int, page, perpage int, query s
 	var totalDown int64
 	var totalUp int64
 
-	baseQuery := db.Model(&model.Inbound{}).Where("user_id = ?", userId)
+	// Base conditions
+	userCondition := "user_id = ?"
+	var conditions []interface{}
+	conditions = append(conditions, userId)
 
 	if query != "" {
+		userCondition += " AND (remark LIKE ? OR port LIKE ?)"
 		searchPattern := "%" + query + "%"
-		baseQuery = baseQuery.Where("remark LIKE ? OR port LIKE ?", searchPattern, searchPattern)
+		conditions = append(conditions, searchPattern, searchPattern)
 	}
 
-	err := baseQuery.Count(&totalCount).Error
+	// Count total records
+	err := db.Model(&model.Inbound{}).
+		Where(userCondition, conditions...).
+		Count(&totalCount).Error
 	if err != nil {
 		return nil, 0, 0, 0, err
 	}
 
-	var downSum, upSum int64
-	err = baseQuery.Select("SUM(down) as down_sum, SUM(up) as up_sum").Row().Scan(&downSum, &upSum)
-	if err != nil {
-		return nil, 0, 0, 0, err
-	}
-	totalDown = downSum
-	totalUp = upSum
-
-	err = baseQuery.
-		Order("id DESC"). // Reverse order by ID
+	// Fetch paginated records
+	err = db.Model(&model.Inbound{}).
+		Where(userCondition, conditions...).
+		Order("id DESC").
 		Offset((page - 1) * perpage).
 		Limit(perpage).
 		Find(&inbounds).Error
+	if err != nil && err != gorm.ErrRecordNotFound {
+		return nil, 0, 0, 0, err
+	}
 
+	// Calculate sums
+	err = db.Model(&model.Inbound{}).
+		Where(userCondition, conditions...).
+		Select("SUM(down) as down_sum, SUM(up) as up_sum").
+		Row().
+		Scan(&totalDown, &totalUp)
 	if err != nil && err != gorm.ErrRecordNotFound {
 		return nil, 0, 0, 0, err
 	}
