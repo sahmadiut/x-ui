@@ -36,7 +36,7 @@
                             </a-col>
                             <a-col :xs="24" :sm="24" :lg="12">
                                 Inbound Count:
-                                <a-tag color="green">[[ dbInbounds.length ]]</a-tag>
+                                <a-tag color="green">[[ total_inbounds ]]</a-tag>
                             </a-col>
                         </a-row>
                     </a-card>
@@ -183,6 +183,7 @@
             pagedInbounds: [],
             total_up: 0,
             total_down: 0,
+            total_inbounds: 0,
             searchKey: '',
             currentPage: 1,
             perPage: 10,
@@ -223,6 +224,7 @@
                 this.paginationOptions.current = this.currentPage;
                 this.total_up = dbInbounds.total_up;
                 this.total_down = dbInbounds.total_down;
+                this.total_inbounds = dbInbounds.total_inbounds;
                 this.pagedInbounds = this.dbInbounds;
                 console.log(this);
             },

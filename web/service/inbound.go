@@ -1,6 +1,7 @@
 package service
 
 import (
+	"errors"
 	"fmt"
 	"time"
 	"x-ui/database"
@@ -25,12 +26,20 @@ func (s *InboundService) GetInbounds(userId int) ([]*model.Inbound, error) {
 }
 
 // inbounds, err := a.inboundService.GetPagedInbounds(user.Id, page, perpage)
-func (s *InboundService) GetPagedInbounds(userId int, page, perpage int, query string) ([]*model.Inbound, int64, int64, int64, error) {
+func (s *InboundService) GetPagedInbounds(userId int, page, perpage int, query string) ([]*model.Inbound, int64, int64, int64, int64, error) {
 	db := database.GetDB()
 	var inbounds []*model.Inbound
 	var totalCount int64
 	var totalDown int64
 	var totalUp int64
+	var totalInbounds int64
+
+	err := db.Model(&model.Inbound{}).
+		Where("user_id = ?", userId).
+		Count(&totalInbounds).Error
+	if err != nil {
+		return nil, 0, 0, 0, 0, err
+	}
 
 	// Base conditions
 	userCondition := "user_id = ?"
@@ -44,11 +53,11 @@ func (s *InboundService) GetPagedInbounds(userId int, page, perpage int, query s
 	}
 
 	// Count total records
-	err := db.Model(&model.Inbound{}).
+	err = db.Model(&model.Inbound{}).
 		Where(userCondition, conditions...).
 		Count(&totalCount).Error
 	if err != nil {
-		return nil, 0, 0, 0, err
+		return nil, 0, 0, 0, 0, err
 	}
 
 	// Fetch paginated records
@@ -58,8 +67,8 @@ func (s *InboundService) GetPagedInbounds(userId int, page, perpage int, query s
 		Offset((page - 1) * perpage).
 		Limit(perpage).
 		Find(&inbounds).Error
-	if err != nil && err != gorm.ErrRecordNotFound {
-		return nil, 0, 0, 0, err
+	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, 0, 0, 0, 0, err
 	}
 
 	// Calculate sums with COALESCE to handle NULL
@@ -68,11 +77,11 @@ func (s *InboundService) GetPagedInbounds(userId int, page, perpage int, query s
 		Select("COALESCE(SUM(down), 0) as down_sum, COALESCE(SUM(up), 0) as up_sum").
 		Row().
 		Scan(&totalDown, &totalUp)
-	if err != nil && err != gorm.ErrRecordNotFound {
-		return nil, 0, 0, 0, err
+	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, 0, 0, 0, 0, err
 	}
 
-	return inbounds, totalCount, totalDown, totalUp, nil
+	return inbounds, totalInbounds, totalCount, totalDown, totalUp, nil
 }
 
 func (s *InboundService) GetAllInbounds() ([]*model.Inbound, error) {

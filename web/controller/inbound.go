@@ -73,7 +73,7 @@ func (a *InboundController) getPagedInbounds(c *gin.Context) {
 	// query
 	query := c.DefaultPostForm("query", "")
 
-	inbounds, totalCount, totalDown, totalUp, err := a.inboundService.GetPagedInbounds(user.Id, page, perpage, query)
+	inbounds, totalInbounds, totalCount, totalDown, totalUp, err := a.inboundService.GetPagedInbounds(user.Id, page, perpage, query)
 	if err != nil {
 		jsonMsg(c, "获取", err)
 		return
@@ -84,13 +84,14 @@ func (a *InboundController) getPagedInbounds(c *gin.Context) {
 
 	// Prepare response
 	response := gin.H{
-		"inbounds":     inbounds,
-		"total_count":  totalCount,
-		"total_pages":  totalPages,
-		"total_down":   totalDown,
-		"total_up":     totalUp,
-		"current_page": page,
-		"per_page":     perpage,
+		"inbounds":       inbounds,
+		"total_count":    totalCount,
+		"total_inbounds": totalInbounds,
+		"total_pages":    totalPages,
+		"total_down":     totalDown,
+		"total_up":       totalUp,
+		"current_page":   page,
+		"per_page":       perpage,
 	}
 
 	jsonObj(c, response, nil)
