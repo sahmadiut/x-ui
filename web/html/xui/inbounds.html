@@ -222,6 +222,8 @@
                 this.paginationOptions.current = this.currentPage;
                 this.total_up = dbInbounds.total_up;
                 this.total_down = dbInbounds.total_down;
+                // pagedInbounds
+                this.pagedInbounds = this.dbInbounds;
                 console.log(this);
             },
             handleTableChange(pagination) {
