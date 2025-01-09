@@ -196,29 +196,28 @@
             loading(spinning=true) {
                 this.spinning = spinning;
             },
-            async getDBInbounds() {
+            async getDBInbounds(pagination = this.paginationOptions) {
                 this.loading();
-                const params = {
-                    page: this.currentPage,
-                    perpage: this.perPage
-                };
-                const msg = await HttpUtil.post('/xui/inbound/paged-list', params);
+                const {current, pageSize} = pagination;
+                const msg = await HttpUtil.post('/xui/inbound/paged-list', {page: current, perpage: pageSize});
                 this.loading(false);
                 if (!msg.success) {
                     return;
                 }
-                this.setInbounds(msg.obj.inbounds, msg.obj.total_count);
+                this.setInbounds(msg.obj.inbounds);
+                this.paginationOptions.total = msg.obj.total_count;
             },
-            setInbounds(pagedInbounds, totalCount) {
-                this.inbounds.splice(0);
-                this.dbInbounds.splice(0);
-                for (const inbound of pagedInbounds) {
-                    const dbInbound = new DBInbound(inbound);
-                    this.inbounds.push(dbInbound.toInbound());
-                    this.dbInbounds.push(dbInbound);
+            setInbounds(dbInbounds) {
+                this.inbounds = dbInbounds.map(inbound => new DBInbound(inbound).toInbound());
+                this.dbInbounds = dbInbounds.map(inbound => new DBInbound(inbound));
+
+                // Calculate the total upload and download
+                let up = 0, down = 0;
+                for (const inbound of this.dbInbounds) {
+                    up += inbound.up || 0;
+                    down += inbound.down || 0;
                 }
-                this.paginationOptions.total = totalCount;
-                this.paginationOptions.current = this.currentPage;
+                this.total = {up, down}; // Update total
             },
             handleTableChange(pagination) {
                 this.currentPage = pagination.current;
