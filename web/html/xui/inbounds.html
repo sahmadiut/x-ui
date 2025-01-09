@@ -181,6 +181,8 @@
             inbounds: [],
             dbInbounds: [],
             pagedInbounds: [],
+            total_up: 0,
+            total_down: 0,
             searchKey: '',
             currentPage: 1,
             perPage: 10,
@@ -196,28 +198,29 @@
             loading(spinning=true) {
                 this.spinning = spinning;
             },
-            async getDBInbounds(pagination = this.paginationOptions) {
+            async getDBInbounds() {
                 this.loading();
-                const {current, pageSize} = pagination;
-                const msg = await HttpUtil.post('/xui/inbound/paged-list', {page: current, perpage: pageSize});
+                const msg = await HttpUtil.post('/xui/inbound/paged-list', {
+                    page: this.currentPage,
+                    perpage: this.perPage
+                });
                 this.loading(false);
                 if (!msg.success) {
                     return;
                 }
-                this.setInbounds(msg.obj.inbounds);
-                this.paginationOptions.total = msg.obj.total_count;
+                this.setInbounds(msg.obj.inbounds, msg.obj.total_count, msg.obj.total_up, msg.obj.total_down);
             },
-            setInbounds(dbInbounds) {
-                this.inbounds = dbInbounds.map(inbound => new DBInbound(inbound).toInbound());
-                this.dbInbounds = dbInbounds.map(inbound => new DBInbound(inbound));
-
-                // Calculate the total upload and download
-                let up = 0, down = 0;
-                for (const inbound of this.dbInbounds) {
-                    up += inbound.up || 0;
-                    down += inbound.down || 0;
+            setInbounds(dbInbounds, total, total_up, total_down) {
+                this.inbounds.splice(0);
+                this.dbInbounds.splice(0);
+                for (const inbound of dbInbounds) {
+                    const dbInbound = new DBInbound(inbound);
+                    this.inbounds.push(dbInbound.toInbound());
+                    this.dbInbounds.push(dbInbound);
                 }
-                this.total = {up, down}; // Update total
+                this.paginationOptions.total = total;
+                this.total_up = total_up;
+                this.total_down = total_down;
             },
             handleTableChange(pagination) {
                 this.currentPage = pagination.current;
@@ -226,10 +229,10 @@
             },
             searchInbounds(key) {
                 if (ObjectUtil.isEmpty(key)) {
-                    this.setInbounds(this.dbInbounds);
+                    this.getDBInbounds();
                 } else {
                     const filtered = this.dbInbounds.filter(inbound => ObjectUtil.deepSearch(inbound, key));
-                    this.setInbounds(filtered);
+                    this.setInbounds(filtered, filtered.length);
                 }
             },
             clickAction(action, dbInbound) {
@@ -359,14 +362,9 @@
         },
         computed: {
             total() {
-                let down = 0, up = 0;
-                for (let i = 0; i < this.dbInbounds.length; ++i) {
-                    down += this.dbInbounds[i].down;
-                    up += this.dbInbounds[i].up;
-                }
                 return {
-                    down: down,
-                    up: up,
+                    down: this.total_down,
+                    up: this.total_up,
                 };
             }
         },
