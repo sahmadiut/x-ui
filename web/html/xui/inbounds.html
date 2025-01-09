@@ -198,31 +198,32 @@
             },
             async getDBInbounds() {
                 this.loading();
-                const msg = await HttpUtil.post('/xui/inbound/list');
+                const params = {
+                    page: this.currentPage,
+                    perpage: this.perPage
+                };
+                const msg = await HttpUtil.post('/xui/inbound/paged-list', params);
                 this.loading(false);
                 if (!msg.success) {
                     return;
                 }
-                this.setInbounds(msg.obj);
+                this.setInbounds(msg.obj.inbounds, msg.obj.total_count);
             },
-            setInbounds(dbInbounds) {
+            setInbounds(pagedInbounds, totalCount) {
                 this.inbounds.splice(0);
                 this.dbInbounds.splice(0);
-                for (const inbound of dbInbounds) {
+                for (const inbound of pagedInbounds) {
                     const dbInbound = new DBInbound(inbound);
                     this.inbounds.push(dbInbound.toInbound());
                     this.dbInbounds.push(dbInbound);
                 }
-                this.updatePagination();
-            },
-            updatePagination() {
-                this.paginationOptions.total = this.dbInbounds.length;
-                this.pagedInbounds = this.dbInbounds.slice((this.currentPage - 1) * this.perPage, this.currentPage * this.perPage);
+                this.paginationOptions.total = totalCount;
+                this.paginationOptions.current = this.currentPage;
             },
             handleTableChange(pagination) {
                 this.currentPage = pagination.current;
                 this.perPage = pagination.pageSize;
-                this.updatePagination();
+                this.getDBInbounds();
             },
             searchInbounds(key) {
                 if (ObjectUtil.isEmpty(key)) {
