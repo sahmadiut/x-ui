@@ -71,9 +71,9 @@ func (a *InboundController) getPagedInbounds(c *gin.Context) {
 	}
 
 	// query
-	query := c.DefaultPostForm("query", "")
+	//query := c.DefaultPostForm("query", "")
 
-	inbounds, totalCount, totalDown, totalUp, err := a.inboundService.GetPagedInbounds(user.Id, page, perpage, query)
+	inbounds, totalCount, totalDown, totalUp, err := a.inboundService.GetPagedInbounds(user.Id, page, perpage, "")
 	if err != nil {
 		jsonMsg(c, "获取", err)
 		return
