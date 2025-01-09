@@ -25,17 +25,31 @@ func (s *InboundService) GetInbounds(userId int) ([]*model.Inbound, error) {
 }
 
 // inbounds, err := a.inboundService.GetPagedInbounds(user.Id, page, perpage)
-func (s *InboundService) GetPagedInbounds(userId int, page, perpage int) ([]*model.Inbound, int64, error) {
+func (s *InboundService) GetPagedInbounds(userId int, page, perpage int) ([]*model.Inbound, int64, int64, int64, error) {
 	db := database.GetDB()
 	var inbounds []*model.Inbound
 	var totalCount int64
+	var totalDown int64
+	var totalUp int64
 
 	// Get total count of inbounds for the user
 	err := db.Model(&model.Inbound{}).
 		Where("user_id = ?", userId).
 		Count(&totalCount).Error
 	if err != nil {
-		return nil, 0, err
+		return nil, 0, 0, 0, err
+	}
+
+	// Get the total sum of Down and Up
+	err = db.Model(&model.Inbound{}).
+		Where("user_id = ?", userId).
+		Select("COALESCE(SUM(down), 0) AS total_down, COALESCE(SUM(up), 0) AS total_up").
+		Scan(&struct {
+			TotalDown *int64 `gorm:"column:total_down"`
+			TotalUp   *int64 `gorm:"column:total_up"`
+		}{&totalDown, &totalUp}).Error
+	if err != nil {
+		return nil, 0, 0, 0, err
 	}
 
 	// Fetch paginated results
@@ -47,10 +61,10 @@ func (s *InboundService) GetPagedInbounds(userId int, page, perpage int) ([]*mod
 		Find(&inbounds).Error
 
 	if err != nil && err != gorm.ErrRecordNotFound {
-		return nil, 0, err
+		return nil, 0, 0, 0, err
 	}
 
-	return inbounds, totalCount, nil
+	return inbounds, totalCount, totalDown, totalUp, nil
 }
 
 func (s *InboundService) GetAllInbounds() ([]*model.Inbound, error) {

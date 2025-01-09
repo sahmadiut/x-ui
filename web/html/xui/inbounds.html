@@ -12,17 +12,15 @@
         margin-top: 10px;
     }
 </style>
-
 <body>
 <a-layout id="app" v-cloak>
     {{ template "commonSider" . }}
     <a-layout id="content-layout">
         <a-layout-content>
-            <a-spin :spinning="spinning" :delay="500" tip="Loading...">
+            <a-spin :spinning="spinning" :delay="500" tip="loading">
                 <transition name="list" appear>
                     <a-tag v-if="false" color="red" style="margin-bottom: 10px">
-                        Please update your username and password in the panel settings as soon as possible to prevent
-                        account leakage risks.
+                        Please go to the panel settings as soon as possible to modify the username and password, otherwise there may be a risk of leaking account information
                     </a-tag>
                 </transition>
                 <transition name="list" appear>
@@ -37,7 +35,7 @@
                                 <a-tag color="green">[[ sizeFormat(total.up + total.down) ]]</a-tag>
                             </a-col>
                             <a-col :xs="24" :sm="24" :lg="12">
-                                Number of Inbounds:
+                                Inbound Count:
                                 <a-tag color="green">[[ dbInbounds.length ]]</a-tag>
                             </a-col>
                         </a-row>
@@ -48,34 +46,29 @@
                         <div slot="title">
                             <a-button type="primary" icon="plus" @click="openAddInbound">Add Inbound</a-button>
                         </div>
-                        <a-input v-model="searchKey" placeholder="Search" autofocus
-                                 style="max-width: 300px; margin-bottom: 20px;"></a-input>
+                        <a-input v-model="searchKey" placeholder="Search" autofocus style="max-width: 300px; margin-bottom: 10px"></a-input>
                         <a-table :columns="columns" :row-key="dbInbound => dbInbound.id"
-                                 :data-source="dbInbounds"
+                                 :data-source="pagedInbounds"
                                  :loading="spinning" :scroll="{ x: 1500 }"
                                  :pagination="paginationOptions"
                                  style="margin-top: 20px"
-                                 @change="getDBInbounds">
-                            <!-- Column Slots and Templates -->
+                                 @change="handleTableChange">
                             <template slot="action" slot-scope="text, dbInbound">
                                 <a-dropdown :trigger="['click']">
-                                    <a @click.prevent>Actions</a>
+                                    <a @click="e => e.preventDefault()">Actions</a>
                                     <a-menu slot="overlay" @click="a => clickAction(a, dbInbound)">
                                         <a-menu-item v-if="dbInbound.hasLink()" key="qrcode">
-                                            <a-icon type="qrcode"></a-icon>
-                                            QR Code
+                                            <a-icon type="qrcode"></a-icon>QR Code
                                         </a-menu-item>
                                         <a-menu-item key="edit">
-                                            <a-icon type="edit"></a-icon>
-                                            Edit
+                                            <a-icon type="edit"></a-icon>Edit
                                         </a-menu-item>
                                         <a-menu-item key="resetTraffic">
-                                            <a-icon type="retweet"></a-icon>
-                                            Reset Traffic
+                                            <a-icon type="retweet"></a-icon>Reset Traffic
                                         </a-menu-item>
                                         <a-menu-item key="delete">
                                             <span style="color: #FF4D4F">
-                                                <a-icon type="delete"></a-icon> Delete
+                                                <a-icon type="delete"></a-icon>Delete
                                             </span>
                                         </a-menu-item>
                                     </a-menu>
@@ -85,18 +78,37 @@
                                 <a-tag color="blue">[[ dbInbound.protocol ]]</a-tag>
                             </template>
                             <template slot="traffic" slot-scope="text, dbInbound">
-                                <a-tag color="blue">[[ sizeFormat(dbInbound.up) ]] / [[ sizeFormat(dbInbound.down) ]]
-                                </a-tag>
+                                <a-tag color="blue">[[ sizeFormat(dbInbound.up) ]] / [[ sizeFormat(dbInbound.down) ]]</a-tag>
                                 <template v-if="dbInbound.total > 0">
-                                    <a-tag v-if="dbInbound.up + dbInbound.down < dbInbound.total" color="cyan">[[
-                                        sizeFormat(dbInbound.total) ]]
-                                    </a-tag>
+                                    <a-tag v-if="dbInbound.up + dbInbound.down < dbInbound.total" color="cyan">[[ sizeFormat(dbInbound.total) ]]</a-tag>
                                     <a-tag v-else color="red">[[ sizeFormat(dbInbound.total) ]]</a-tag>
                                 </template>
                                 <a-tag v-else color="green">Unlimited</a-tag>
                             </template>
                             <template slot="settings" slot-scope="text, dbInbound">
                                 <a-button type="link" @click="showInfo(dbInbound)">View</a-button>
+                            </template>
+                            <template slot="stream" slot-scope="text, dbInbound, index">
+                                <template v-if="dbInbound.isVMess || dbInbound.isVLess || dbInbound.isTrojan || dbInbound.isSS">
+                                    <a-tag color="green">[[ inbounds[index].stream.network ]]</a-tag>
+                                    <a-tag v-if="inbounds[index].stream.isTls" color="blue">tls</a-tag>
+                                    <a-tag v-if="inbounds[index].stream.isXTls" color="blue">xtls</a-tag>
+                                </template>
+                                <template v-else>None</template>
+                            </template>
+                            <template slot="enable" slot-scope="text, dbInbound">
+                                <a-switch v-model="dbInbound.enable" @change="switchEnable(dbInbound)"></a-switch>
+                            </template>
+                            <template slot="expiryTime" slot-scope="text, dbInbound">
+                                <template v-if="dbInbound.expiryTime > 0">
+                                    <a-tag v-if="dbInbound.isExpiry" color="red">
+                                        [[ DateUtil.formatMillis(dbInbound.expiryTime) ]]
+                                    </a-tag>
+                                    <a-tag v-else color="blue">
+                                        [[ DateUtil.formatMillis(dbInbound.expiryTime) ]]
+                                    </a-tag>
+                                </template>
+                                <a-tag v-else color="green">Unlimited</a-tag>
                             </template>
                         </a-table>
                     </a-card>
@@ -107,106 +119,118 @@
 </a-layout>
 {{template "js" .}}
 <script>
+
+    const columns = [{
+        title: "Actions",
+        align: 'center',
+        width: 30,
+        scopedSlots: { customRender: 'action' },
+    }, {
+        title: "Enable",
+        align: 'center',
+        width: 40,
+        scopedSlots: { customRender: 'enable' },
+    }, {
+        title: "ID",
+        align: 'center',
+        dataIndex: "id",
+        width: 30,
+    }, {
+        title: "Remark",
+        align: 'center',
+        width: 100,
+        dataIndex: "remark",
+    }, {
+        title: "Protocol",
+        align: 'center',
+        width: 60,
+        scopedSlots: { customRender: 'protocol' },
+    }, {
+        title: "Port",
+        align: 'center',
+        dataIndex: "port",
+        width: 60,
+    }, {
+        title: "Traffic ↑|↓",
+        align: 'center',
+        width: 150,
+        scopedSlots: { customRender: 'traffic' },
+    }, {
+        title: "Details",
+        align: 'center',
+        width: 40,
+        scopedSlots: { customRender: 'settings' },
+    }, {
+        title: "Stream Config",
+        align: 'center',
+        width: 60,
+        scopedSlots: { customRender: 'stream' },
+    }, {
+        title: "Expiry Time",
+        align: 'center',
+        width: 80,
+        scopedSlots: { customRender: 'expiryTime' },
+    }];
+
     const app = new Vue({
         delimiters: ['[[', ']]'],
         el: '#app',
         data: {
-            siderDrawer: false,
+            siderDrawer,
             spinning: false,
             inbounds: [],
             dbInbounds: [],
+            pagedInbounds: [],
             searchKey: '',
+            currentPage: 1,
+            perPage: 10,
             paginationOptions: {
                 current: 1,
                 pageSize: 10,
                 total: 0,
                 showSizeChanger: true,
-                pageSizeOptions: ['10', '20', '50'],
+                showQuickJumper: true,
             },
-            total: {
-                up: 0,
-                down: 0,
-            },
-            columns: [
-                {
-                    title: "operate",
-                    align: 'center',
-                    width: 30,
-                    scopedSlots: {customRender: 'action'},
-                }, {
-                    title: "enable",
-                    align: 'center',
-                    width: 40,
-                    scopedSlots: {customRender: 'enable'},
-                }, {
-                    title: "id",
-                    align: 'center',
-                    dataIndex: "id",
-                    width: 30,
-                }, {
-                    title: "remark",
-                    align: 'center',
-                    width: 100,
-                    dataIndex: "remark",
-                }, {
-                    title: "protocol",
-                    align: 'center',
-                    width: 60,
-                    scopedSlots: {customRender: 'protocol'},
-                }, {
-                    title: "port",
-                    align: 'center',
-                    dataIndex: "port",
-                    width: 60,
-                }, {
-                    title: "usage ↑|↓",
-                    align: 'center',
-                    width: 150,
-                    scopedSlots: {customRender: 'traffic'},
-                }, {
-                    title: "More",
-                    align: 'center',
-                    width: 40,
-                    scopedSlots: {customRender: 'settings'},
-                }, {
-                    title: "Transport",
-                    align: 'center',
-                    width: 60,
-                    scopedSlots: {customRender: 'stream'},
-                }, {
-                    title: "Expiry",
-                    align: 'center',
-                    width: 80,
-                    scopedSlots: {customRender: 'expiryTime'},
-                }
-            ],
         },
         methods: {
-            loading(spinning = true) {
+            loading(spinning=true) {
                 this.spinning = spinning;
             },
-            async getDBInbounds(pagination = this.paginationOptions) {
+            async getDBInbounds() {
                 this.loading();
-                const {current, pageSize} = pagination;
-                const msg = await HttpUtil.post('/xui/inbound/paged-list', {page: current, perpage: pageSize});
+                const msg = await HttpUtil.post('/xui/inbound/list');
                 this.loading(false);
                 if (!msg.success) {
                     return;
                 }
-                this.setInbounds(msg.obj.inbounds);
-                this.paginationOptions.total = msg.obj.total_count;
+                this.setInbounds(msg.obj);
             },
             setInbounds(dbInbounds) {
-                this.inbounds = dbInbounds.map(inbound => new DBInbound(inbound).toInbound());
-                this.dbInbounds = dbInbounds.map(inbound => new DBInbound(inbound));
-
-                // Calculate the total upload and download
-                let up = 0, down = 0;
-                for (const inbound of this.dbInbounds) {
-                    up += inbound.up || 0;
-                    down += inbound.down || 0;
+                this.inbounds.splice(0);
+                this.dbInbounds.splice(0);
+                for (const inbound of dbInbounds) {
+                    const dbInbound = new DBInbound(inbound);
+                    this.inbounds.push(dbInbound.toInbound());
+                    this.dbInbounds.push(dbInbound);
                 }
-                this.total = {up, down}; // Update total
+                this.updatePagination();
+            },
+            updatePagination() {
+                this.paginationOptions.total = this.dbInbounds.length;
+                this.pagedInbounds = this.dbInbounds.slice((this.currentPage - 1) * this.perPage, this.currentPage * this.perPage);
+            },
+            handleTableChange(pagination) {
+                this.currentPage = pagination.current;
+                this.perPage = pagination.pageSize;
+                this.updatePagination();
+            },
+            searchInbounds(key) {
+                if (ObjectUtil.isEmpty(key)) {
+                    this.setInbounds(this.dbInbounds);
+                } else {
+                    const filtered = this.dbInbounds.filter(inbound => ObjectUtil.deepSearch(inbound, key));
+                    this.setInbounds(filtered);
+                }
             },
             clickAction(action, dbInbound) {
                 switch (action.key) {
@@ -232,12 +256,91 @@
                         inModal.loading();
                         await this.addInbound(inbound, dbInbound);
                         inModal.close();
-                    },
+                    }
+                });
+            },
+            openEditInbound(dbInbound) {
+                const inbound = dbInbound.toInbound();
+                inModal.show({
+                    title: 'Edit Inbound',
+                    okText: 'Edit',
+                    inbound: inbound,
+                    dbInbound: dbInbound,
+                    confirm: async (inbound, dbInbound) => {
+                        inModal.loading();
+                        await this.updateInbound(inbound, dbInbound);
+                        inModal.close();
+                    }
                 });
             },
             async addInbound(inbound, dbInbound) {
-                const data = { /* Prepare data as required */};
+                const data = {
+                    up: dbInbound.up,
+                    down: dbInbound.down,
+                    total: dbInbound.total,
+                    remark: dbInbound.remark,
+                    enable: dbInbound.enable,
+                    expiryTime: dbInbound.expiryTime,
+
+                    listen: inbound.listen,
+                    port: inbound.port,
+                    protocol: inbound.protocol,
+                    settings: inbound.settings.toString(),
+                    streamSettings: inbound.stream.toString(),
+                    sniffing: inbound.canSniffing() ? inbound.sniffing.toString() : '{}',
+                };
                 await this.submit('/xui/inbound/add', data, inModal);
+            },
+            async updateInbound(inbound, dbInbound) {
+                const data = {
+                    up: dbInbound.up,
+                    down: dbInbound.down,
+                    total: dbInbound.total,
+                    remark: dbInbound.remark,
+                    enable: dbInbound.enable,
+                    expiryTime: dbInbound.expiryTime,
+
+                    listen: inbound.listen,
+                    port: inbound.port,
+                    protocol: inbound.protocol,
+                    settings: inbound.settings.toString(),
+                    streamSettings: inbound.stream.toString(),
+                    sniffing: inbound.canSniffing() ? inbound.sniffing.toString() : '{}',
+                };
+                await this.submit(`/xui/inbound/update/${dbInbound.id}`, data, inModal);
+            },
+            resetTraffic(dbInbound) {
+                this.$confirm({
+                    title: 'Reset Traffic',
+                    content: 'Are you sure you want to reset traffic?',
+                    okText: 'Reset',
+                    cancelText: 'Cancel',
+                    onOk: () => {
+                        const inbound = dbInbound.toInbound();
+                        dbInbound.up = 0;
+                        dbInbound.down = 0;
+                        this.updateInbound(inbound, dbInbound);
+                    },
+                });
+            },
+            delInbound(dbInbound) {
+                this.$confirm({
+                    title: 'Delete Inbound',
+                    content: 'Are you sure you want to delete this inbound?',
+                    okText: 'Delete',
+                    cancelText: 'Cancel',
+                    onOk: () => this.submit('/xui/inbound/del/' + dbInbound.id),
+                });
+            },
+            showQrcode(dbInbound) {
+                const link = dbInbound.genLink();
+                qrModal.show('QR Code', link);
+            },
+            showInfo(dbInbound) {
+                infoModal.show(dbInbound);
+            },
+            switchEnable(dbInbound) {
+                this.submit(`/xui/inbound/update/${dbInbound.id}`, dbInbound);
             },
             async submit(url, data, modal) {
                 const msg = await HttpUtil.postWithModal(url, data, modal);
@@ -248,13 +351,27 @@
         },
         watch: {
             searchKey(value) {
-                this.getDBInbounds();
-            },
+                this.searchInbounds(value);
+            }
         },
         mounted() {
             this.getDBInbounds();
         },
+        computed: {
+            total() {
+                let down = 0, up = 0;
+                for (let i = 0; i < this.dbInbounds.length; ++i) {
+                    down += this.dbInbounds[i].down;
+                    up += this.dbInbounds[i].up;
+                }
+                return {
+                    down: down,
+                    up: up,
+                };
+            }
+        },
     });
+
 </script>
 {{template "inboundModal"}}
 {{template "promptModal"}}

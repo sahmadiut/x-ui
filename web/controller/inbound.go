@@ -71,7 +71,7 @@ func (a *InboundController) getPagedInbounds(c *gin.Context) {
 	}
 
 	// Fetch paginated inbounds and total count
-	inbounds, totalCount, err := a.inboundService.GetPagedInbounds(user.Id, page, perpage)
+	inbounds, totalCount, totalDown, totalUp, err := a.inboundService.GetPagedInbounds(user.Id, page, perpage)
 	if err != nil {
 		jsonMsg(c, "获取", err)
 		return
@@ -85,6 +85,8 @@ func (a *InboundController) getPagedInbounds(c *gin.Context) {
 		"inbounds":     inbounds,
 		"total_count":  totalCount,
 		"total_pages":  totalPages,
+		"total_down":   totalDown,
+		"total_up":     totalUp,
 		"current_page": page,
 		"per_page":     perpage,
 	}
