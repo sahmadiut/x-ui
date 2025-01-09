@@ -62,10 +62,10 @@ func (s *InboundService) GetPagedInbounds(userId int, page, perpage int, query s
 		return nil, 0, 0, 0, err
 	}
 
-	// Calculate sums
+	// Calculate sums with COALESCE to handle NULL
 	err = db.Model(&model.Inbound{}).
 		Where(userCondition, conditions...).
-		Select("SUM(down) as down_sum, SUM(up) as up_sum").
+		Select("COALESCE(SUM(down), 0) as down_sum, COALESCE(SUM(up), 0) as up_sum").
 		Row().
 		Scan(&totalDown, &totalUp)
 	if err != nil && err != gorm.ErrRecordNotFound {
