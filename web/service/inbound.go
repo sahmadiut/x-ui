@@ -32,43 +32,37 @@ func (s *InboundService) GetPagedInbounds(userId int, page, perpage int, query s
 	var totalDown int64
 	var totalUp int64
 
-	// Build the base query
 	baseQuery := db.Model(&model.Inbound{}).Where("user_id = ?", userId)
 
-	// Apply query filter if provided
 	if query != "" {
-		queryPattern := "%" + query + "%"
-		baseQuery = baseQuery.Where("remark LIKE ? OR port LIKE ?", queryPattern, queryPattern)
+		searchPattern := "%" + query + "%"
+		baseQuery = baseQuery.Where("remark LIKE ? OR port LIKE ?", searchPattern, searchPattern)
 	}
 
-	// Get total count of inbounds for the user
 	err := baseQuery.Count(&totalCount).Error
 	if err != nil {
 		return nil, 0, 0, 0, err
 	}
 
-	// Get the total sum of Down and Up
-	err = baseQuery.Select("COALESCE(SUM(down), 0) AS total_down, COALESCE(SUM(up), 0) AS total_up").
-		Scan(&struct {
-			TotalDown *int64 `gorm:"column:total_down"`
-			TotalUp   *int64 `gorm:"column:total_up"`
-		}{
-			TotalDown: &totalDown,
-			TotalUp:   &totalUp,
-		}).Error
-	if err != nil {
-		return nil, 0, 0, 0, err
-	}
-
-	// Fetch paginated results
-	err = baseQuery.Order("id DESC"). // Reverse order by ID
-						Offset((page - 1) * perpage).
-						Limit(perpage).
-						Find(&inbounds).Error
+	err = baseQuery.
+		Order("id DESC"). // Reverse order by ID
+		Offset((page - 1) * perpage).
+		Limit(perpage).
+		Find(&inbounds).Error
 
 	if err != nil && err != gorm.ErrRecordNotFound {
 		return nil, 0, 0, 0, err
 	}
+
+	// Optionally, calculate totalDown and totalUp if needed
+	// Example:
+	var downSum, upSum int64
+	err = baseQuery.Select("SUM(down) as down_sum, SUM(up) as up_sum").Row().Scan(&downSum, &upSum)
+	if err != nil {
+		return nil, 0, 0, 0, err
+	}
+	totalDown = downSum
+	totalUp = upSum
 
 	return inbounds, totalCount, totalDown, totalUp, nil
 }
