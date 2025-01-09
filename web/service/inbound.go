@@ -45,10 +45,7 @@ func (s *InboundService) GetPagedInbounds(userId int, page, perpage int, query s
 	}
 
 	var downSum, upSum int64
-	err = db.Model(&model.Inbound{}).
-		Where("user_id = ?", userId).
-		Select("SUM(down) as down_sum, SUM(up) as up_sum").
-		Scan(&map[string]interface{}{"down_sum": &downSum, "up_sum": &upSum}).Error
+	err = baseQuery.Select("SUM(down) as down_sum, SUM(up) as up_sum").Row().Scan(&downSum, &upSum)
 	if err != nil {
 		return nil, 0, 0, 0, err
 	}
