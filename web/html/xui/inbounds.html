@@ -202,7 +202,8 @@
                 this.loading();
                 const msg = await HttpUtil.post('/xui/inbound/paged-list', {
                     page: this.currentPage,
-                    perpage: this.perPage
+                    perpage: this.perPage,
+                    query: this.searchKey
                 });
                 this.loading(false);
                 if (!msg.success) {
