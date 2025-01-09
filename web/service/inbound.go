@@ -44,6 +44,17 @@ func (s *InboundService) GetPagedInbounds(userId int, page, perpage int, query s
 		return nil, 0, 0, 0, err
 	}
 
+	var downSum, upSum int64
+	err = db.Model(&model.Inbound{}).
+		Where("user_id = ?", userId).
+		Select("SUM(down) as down_sum, SUM(up) as up_sum").
+		Scan(&map[string]interface{}{"down_sum": &downSum, "up_sum": &upSum}).Error
+	if err != nil {
+		return nil, 0, 0, 0, err
+	}
+	totalDown = downSum
+	totalUp = upSum
+
 	err = baseQuery.
 		Order("id DESC"). // Reverse order by ID
 		Offset((page - 1) * perpage).
@@ -53,16 +64,6 @@ func (s *InboundService) GetPagedInbounds(userId int, page, perpage int, query s
 	if err != nil && err != gorm.ErrRecordNotFound {
 		return nil, 0, 0, 0, err
 	}
-
-	// Optionally, calculate totalDown and totalUp if needed
-	// Example:
-	var downSum, upSum int64
-	err = baseQuery.Select("SUM(down) as down_sum, SUM(up) as up_sum").Row().Scan(&downSum, &upSum)
-	if err != nil {
-		return nil, 0, 0, 0, err
-	}
-	totalDown = downSum
-	totalUp = upSum
 
 	return inbounds, totalCount, totalDown, totalUp, nil
 }
